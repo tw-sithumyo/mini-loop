@@ -1,10 +1,19 @@
 #!/usr/bin/env bash
 # install mojaloop using Lewis Daly's temporary version
-# 18th April 20202
+# 18th April 2020
 
 # set locations 
 MOJALOOP_CHARTS_DIR=/vagrant/vessels-tech/helm
 MJALOOP_CHARTS_BRANCH='fix/219-kubernetes-17'
+export KUBERNETES_RELEASE=1.18
+export PATH=$PATH:/snap/bin
+
+# set system related  vars
+EXTRA_SWAP_SPACE_GB="5G"
+SWAPFILE="/swapfile"
+
+
+echo "PATH set to : $PATH"
 
 echo "add /etc/hosts entries for local access to mojaloop endpoints" 
 ENDPOINTSLIST=(127.0.0.1    localhost forensic-logging-sidecar.local central-kms.local central-event-processor.local email-notifier.local central-ledger.local 
@@ -15,11 +24,23 @@ central-settlement.local ml-api-adapter.local account-lookup-service.local
 export ENDPOINTS=`echo ${ENDPOINTSLIST[*]}`
 
 perl -p -i.bak -e 's/127\.0\.0\.1.*localhost.*$/$ENV{ENDPOINTS} /' /etc/hosts
-ping  -c 2 account-lookup-service-admin 
 
-export KUBERNETES_RELEASE=1.18
-export PATH=$PATH:/snap/bin
-echo $PATH
+# test that the extra /eytc/hosts entries have been added correctly
+if  [[ !  `ping  -c 2 account-lookup-service-admin ` ]] ; then
+    echo "Error adding localhost entries. Exiting ..."
+    exit 1
+fi
+
+echo "Increase Swap by: $EXTRA_SWAP_SPACE_GB GBs "
+
+if [ ! -f "$SWAPFILE" ] ; then
+    fallocate -l $EXTRA_SWAP_SPACE_GB /swapfile
+    chmod 600 /swapfile
+    mkswap /swapfile
+    swapon /swapfile
+    echo "/swapfile swap swap defaults 0 0" >> /etc/fstab
+fi 
+free -h
 
 echo "install  version 10+ of node"
 curl -sL https://deb.nodesource.com/setup_10.x | sudo -E bash

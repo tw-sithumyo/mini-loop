@@ -17,7 +17,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   config.vm.provider "virtualbox" do |vb|
     # Display the VirtualBox GUI when booting the machine
     vb.gui = false
-    vb.memory = 8192
+    vb.memory = 4096
     vb.cpus = 2
     vb.name = NAME
   end
@@ -26,8 +26,8 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   config.vm.provision "file", source: "../scripts",  \
                               destination: "/vagrant/scripts"
 
-
-  config.vm.provision "shell", inline: <<-SHELL
+                            
+  config.vm.provision "vagrant_prov", type: "shell", inline: <<-SHELL
     echo "---- configure for mojaloop  ---- "
     /vagrant/scripts/vagrant.sh
     su - vagrant -c "/vagrant/scripts/mojaloop-install-local.sh"
