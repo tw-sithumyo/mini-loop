@@ -27,7 +27,6 @@ Thumbs.db
 .pydevproject
 .idea
 *.log
-*.json
 *.swp
 sds_*
 Pipfile*

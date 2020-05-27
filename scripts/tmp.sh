@@ -31,4 +31,4 @@ git checkout -b fix/219-kubernetes-17-helm2-2 origin/fix/219-kubernetes-17-helm2
 python3 -m http.server & 
 
 
-helm install miniloop http://localhost:8000/mojaloop-9.3.0.tgz 
+helm install miniloop -f miniloop-values.yml http://localhost:8000/mojaloop-10.1.0.tgz
