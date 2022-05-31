@@ -38,8 +38,9 @@ Pipfile*
 *.code-workspace
 
 # Terraform
-.terraform
+.terraform*
 terraform*zip
+*tfstate*
 
 # Ansible retry files
 *.retry
