@@ -1,0 +1,26 @@
+data "aws_ami" "ubuntuimg" {
+  executable_users = ["self"]
+  most_recent      = true
+  #name_regex       = ".*ubuntu.*"
+  owners           = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-*"]
+  }
+
+#   filter {
+#     name   = "root-device-type"
+#     values = ["ebs"]
+#   }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
+output ubuntuimg {
+    value=data.aws_ami.ubuntuimg
+
+}
