@@ -14,14 +14,14 @@ provider "aws" {
   region  = "eu-west-2"
   default_tags {
     tags = {
-      Environment = "mini-loop-env1"
-      Name        = "ML Provider Tag"
+      Environment = "oss-lab"
+      Name        = "mini-loop"
     }
   }
 }
 
 resource "aws_instance" "mini-loop" {
-  ami           = var.ml-ami
+  ami           = var.ami-map[var.linux-distro]
   instance_type = var.ml-instance-type 
   key_name      = var.ml-keyname
 
@@ -32,6 +32,7 @@ resource "aws_instance" "mini-loop" {
 
 
   tags = {
-    Name = "mini-loop"
+    "mojaloop/cost_center":  "oss-lab" 
+    "mojaloop/owner": "tdaly"
   }
 }
