@@ -32,7 +32,7 @@ resource "aws_instance" "mini-loop" {
 
 
   tags = {
-    "mojaloop/cost_center":  "oss-lab" 
-    "mojaloop/owner": "tdaly"
+    "mojaloop/cost_center" =  "oss-lab" 
+    "mojaloop/owner" = "tdaly"
   }
 }
