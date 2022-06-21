@@ -40,3 +40,13 @@ variable "ml-instance-name1" {
     description = "the name of the mini-loop instance"
     type        = string 
 }
+
+variable "git_user_name" {
+    description = "the name of the git user for any git operations"
+    type        = string 
+}
+
+variable "git_user_email" {
+    description = "the email of the git user for any git operations"
+    type        = string 
+}
