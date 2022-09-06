@@ -239,6 +239,24 @@ function install_mojaloop_from_local {
   fi 
 }
 
+function upgrade_mojaloop_from_local {
+  # assumes mojaloop is already installed
+  # todo check ML is already running and exit if not 
+
+  # upgrade the chart
+  printf  " ==> upgrade %s helm chart and wait for upto %s secs for it to be ready \n" "$ML_RELEASE_NAME" "$TIMEOUT_SECS"
+  printf  "     executing helm upgrade $RELEASE_NAME --wait --timeout $TIMEOUT_SECS $HOME/helm/mojaloop  \n "
+  helm upgrade $ML_RELEASE_NAME --wait --timeout $TIMEOUT_SECS  --namespace "$NAMESPACE" $HOME/helm/mojaloop  
+
+  if [[ `helm status $ML_RELEASE_NAME  --namespace "$NAMESPACE" | grep "^STATUS:" | awk '{ print $2 }' ` = "deployed" ]] ; then 
+    printf " ==> [%s] deployed sucessfully \n" "$ML_RELEASE_NAME"
+  else 
+    printf "** Error: %s helm chart upgrade failed \n" "$ML_RELEASE_NAME"
+    printf "**\n\n"
+    exit 1
+  fi 
+}
+
 function delete_mojaloop_helm_chart {
   printf "==> uninstalling mojaloop: helm delete %s --namespace %s" "$NAMESPACE" "$ML_RELEASE_NAME"
   ml_exists=`helm ls -a --namespace $NAMESPACE | grep $ML_RELEASE_NAME | cut -d " " -f1`
@@ -321,7 +339,7 @@ Example 4 : $0 -m delete_db          # cleanly delete the mojaloop database only
 Example 5 : $0 -m check_ml           # check the health of the ML endpoints
  
 Options:
--m mode ............ install_ml|check_ml|delete_ml|install_db|delete_db 
+-m mode ............ install_ml|upgrade_ml|check_ml|delete_ml|install_db|delete_db 
 -s skip_repackage .. mainly for test/dev use (skips the repackage of the local charts)
 -t secs ............ number of seconds (timeout) to wait for pods to all be reach running state
 -n namespace ....... the namespace to deploy mojaloop into 
@@ -416,6 +434,8 @@ elif [[ "$mode" == "install_ml" ]]; then
   install_mojaloop_from_local
   check_mojaloop_health
   print_success_message 
+elif [[ "$mode" == "upgrade_ml" ]]; then  
+  upgrade_mojaloop_from_local
 elif [[ "$mode" == "check_ml" ]]; then
   check_mojaloop_health
 else 

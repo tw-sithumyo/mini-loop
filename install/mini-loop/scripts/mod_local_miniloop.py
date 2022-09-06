@@ -120,8 +120,11 @@ def main(argv) :
         "http-api"  : "4002",
         "mysql" : "3306",
         "mongodb" : "27017",
-        "inboundapi" : "{{ $config.config.schemeAdapter.env.INBOUND_LISTEN_PORT }}",
-        "outboundapi" : "{{ $config.config.schemeAdapter.env.OUTBOUND_LISTEN_PORT }}"
+        "inboundapi" : "4000",
+        "outboundapi" : "4001",
+        "inbound" : "{{ $config.config.thirdpartysdk.env.INBOUND_LISTEN_PORT }}",
+        "outbound" : "{{ $config.config.thirdpartysdk.env.OUTBOUND_LISTEN_PORT }}"
+
     }
 
     ingress_cn = set_ingressclassname(args.kubernetes)
@@ -154,9 +157,11 @@ def main(argv) :
                 print(line)
 
     # modify the ingress.yaml files 
-    print(" ==> mod_local_miniloop : Modify helm template ingress.yaml files to implement newer ingress")
+    print(" ==> mod_local_miniloop : Modify helm template ingress.yaml files to implement newer ingress api")
     print(f" ==> mod_local_miniloop : Modify helm template ingress.yaml implement correct ingressClassName [{ingress_cn}]")
-    for vf in p.rglob('*/ingress.yaml'): 
+    ing_count = 0 
+    for vf in p.rglob('**/*ingress*.yaml'): 
+        ing_count +=1
         backupfile= Path(vf.parent) / f"{vf.name}_bak"
 
         with FileInput(files=[str(vf)], inplace=True) as f:
@@ -191,6 +196,7 @@ def main(argv) :
                 else :  
                     print(line)
 
+    print(f" ==> mod_local_miniloop : number of ingress.yaml files processed  [{ing_count}]")
     # put the database password file into the mysql helm chart values file 
     print(f" ==> mod_local_miniloop : generating a new database password")
     print(f" ==> mod_local_miniloop : insert new pw into [{mysql_values_file}]")
@@ -230,6 +236,16 @@ def main(argv) :
                     if (value.get('db_type')): 
                         value['db_host'] = 'mldb'
                         value['db_password'] = db_pass
+
+            ## database config is done differently for thirdparty charts 
+            for x, value in lookup("config", data):         
+                if  isinstance(value, dict):
+                    if (value.get('default.json')): 
+                        tmp_dict=value['default.json']
+                        if tmp_dict.get('DATABASE'): 
+                            tmp_dict['DATABASE']['HOST'] = 'mldb'
+                            tmp_dict['DATABASE']['PASSWORD'] = db_pass
+                            print(f" DEBUGGING>>>> x is {x}  and value is {tmp_dict} ")
 
             ## sept 1 2022: update the mongo command to mongosh so we can use latest mongodb release
             ##              this fixes a recent issue with centraleventprocessor failing to start
