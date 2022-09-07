@@ -143,7 +143,12 @@ function modify_local_helm_charts {
   printf "==> modifying the local mojaloop helm charts to run on kubernetes v1.22+  "
   # note: this also updates $ETC_DIR/mysql_values.yaml with a new DB password
   # this password is and needs to be the same in all the values files which access the DB
-  $SCRIPTS_DIR/mod_local_miniloop.py -d $HOME/helm -k $k8s_distro >> $LOGFILE 2>>$ERRFILE
+  if [[ "$INSTALL_THIRDPARTY" == "true" ]]; then 
+    # include the -t flag to insure charts enable thirdparty deplpoyment 
+    $SCRIPTS_DIR/mod_local_miniloop.py -d $HOME/helm -k $k8s_distro -t >> $LOGFILE 2>>$ERRFILE
+  else 
+    $SCRIPTS_DIR/mod_local_miniloop.py -d $HOME/helm -k $k8s_distro -t >> $LOGFILE 2>>$ERRFILE
+  fi
   NEED_TO_REPACKAGE="true"
   printf " [ done ] \n"
 }
@@ -206,11 +211,21 @@ function install_db {
   fi 
 }
 
+function install_thirdparty_deps {
+  # install the dependencies for the thirdparty charts
+  # note that the mini-loop mysql database install takes care of the databases
+  # so we just have to install redis 
+  kubectl apply -f $ETC_DIR/redis_for_thirdparty.yaml 
+}
+
+
 function install_mojaloop_from_local {
   # delete the old chart if it exists
   delete_mojaloop_helm_chart 
   install_db
-
+  if [[ "$INSTALL_THIRDPARTY" == "true" ]]; then
+    install_thirdparty_deps
+  fi 
   # install the chart
   printf  " ==> install %s helm chart and wait for upto %s  secs for it to be ready \n" "$ML_RELEASE_NAME" "$TIMEOUT_SECS"
   printf  "     executing helm install $RELEASE_NAME --wait --timeout $TIMEOUT_SECS $HOME/helm/mojaloop  \n "
@@ -370,12 +385,13 @@ K8S_CURRENT_RELEASE_LIST=( "1.22" "1.23" "1.24" )
 SCRIPTS_DIR="$( cd $(dirname "$0")/../scripts ; pwd )"
 ETC_DIR="$( cd $(dirname "$0")/../etc ; pwd )"
 NEED_TO_REPACKAGE="false"
+INSTALL_THIRDPARTY="false" 
 EXTERNAL_ENDPOINTS_LIST=(ml-api-adapter.local central-ledger.local quoting-service.local transaction-request-service.local moja-simulator.local ) 
 #ML_VALUES_FILE="miniloop_values.yaml"
 
 # Process command line options as required
-while getopts "dfst:n:m:l:hH" OPTION ; do
-   case "${OPTION}" in
+while getopts "dfst:n:m:l:i:hH" OPTION ; do
+   case "$OPTION" in
         f)  force="true"
         ;; 
         t)  tsecs="${OPTARG}"
@@ -388,7 +404,9 @@ while getopts "dfst:n:m:l:hH" OPTION ; do
         ;;
         s)  skip_repackage="true"
         ;;
-        l)  logfiles="${OPTARG}"
+        l) logfiles="${OPTARG}"
+        ;;
+        i) install_opts="${OPTARG}"
         ;;
         h|H)	showUsage
                 exit 0
@@ -400,10 +418,16 @@ while getopts "dfst:n:m:l:hH" OPTION ; do
     esac
 done
 
+
+
 printf "\n\n****************************************************************************************\n"
 printf "            -- mini-loop Mojaloop local install utility -- \n"
 printf " utilities for deploying local Mojaloop helm chart for kubernetes 1.22+  \n"
 printf "********************* << START  >> *****************************************************\n\n"
+if [[ "$install_opts" == "thirdparty" ]] ; then 
+  #printf " thirdparty is set we are going to install  \n" $thirdparty
+  INSTALL_THIRDPARTY="true"
+fi
 check_arch
 check_user
 set_k8s_version

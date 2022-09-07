@@ -83,6 +83,7 @@ def parse_args(args=sys.argv[1:]):
     parser.add_argument("-d", "--directory", required=True, help="directory for helm charts")
     parser.add_argument("-v", "--verbose", required=False, action="store_true", help="print more verbose messages ")
     parser.add_argument("-k", "--kubernetes", type=str, default="microk8s", choices=["microk8s", "k3s" ] , help=" kubernetes distro  ")
+    parser.add_argument("-t", "--thirdparty", required=False, action="store_true", help="enable thirdparty charts ")
 
     args = parser.parse_args(args)
     if len(sys.argv[1:])==0:
@@ -103,6 +104,11 @@ def main(argv) :
     if (args.verbose): 
         print(f"mysql_values_file  is {mysql_values_file}")
         print(f"mysql password is {db_pass}")
+
+    if args.thirdparty: 
+        print("yep ")
+    else : 
+        print("nope")
 
     ## check the yaml of these files because ruamel python lib has issues with loading em 
     yaml_files_check_list = [
@@ -209,7 +215,11 @@ def main(argv) :
 
     print(" ==> mod_local_miniloop : Modify helm values to implement single mysql database")
     print(" ==> mod_local_miniloop : also update mongo command to mongosh command")
+    vf_count=0
+    #for vf in p.glob('**/chart-admin/*values.yaml') :
     for vf in p.glob('**/*values.yaml') :
+        vf_count += 1
+        config_count = 0 
         with open(vf) as f:
             if (args.verbose): 
                 print(f"===> Processing file < {vf.parent}/{vf.name} > ")
@@ -231,21 +241,51 @@ def main(argv) :
 
             # update the values files to use a mysql instance that has already been deployed 
             # and that uses a newly generated database password 
-            for x, value in lookup("config", data):         
+            for x, value in lookup("config", data):  
+                config_count +=1        
                 if  isinstance(value, dict):
                     if (value.get('db_type')): 
                         value['db_host'] = 'mldb'
                         value['db_password'] = db_pass
 
-            ## database config is done differently for thirdparty charts 
-            for x, value in lookup("config", data):         
-                if  isinstance(value, dict):
-                    if (value.get('default.json')): 
+                    ## Sept 7th 2022:  setup to enable thirdparty 
+                    ## database config is done differently for thirdparty charts 
+                    ## and even differently within thirdparty charts so 
+                    ## this code updates the thirdparty values and documents
+                    ## where we can standardise in the future in the core 
+                    ## note these values must match what is in the mini-loop/etc/mysql_values.yaml 
+                    if value.get('default.json'): 
                         tmp_dict=value['default.json']
                         if tmp_dict.get('DATABASE'): 
                             tmp_dict['DATABASE']['HOST'] = 'mldb'
                             tmp_dict['DATABASE']['PASSWORD'] = db_pass
-                            print(f" DEBUGGING>>>> x is {x}  and value is {tmp_dict} ")
+                            tmp_dict['DATABASE']['USER'] = 'consent_oracle'
+                            tmp_dict['DATABASE']['DATABASE'] = 'consent_oracle'
+                            #print(f" DEBUGGING>>>> x is {x}  and value is {tmp_dict} ")
+                        elif value.get('production.json'): 
+                            tmp_dict=value['production.json']
+                            if tmp_dict.get('DATABASE'):
+                                tmp_dict2 = tmp_dict['DATABASE']
+                                if tmp_dict2.get('connection'): 
+                                    tmp_dict2['connection']['host'] = 'mldb'
+                                    tmp_dict2['connection']['password'] = db_pass
+                                    # tmp_dict2['connection']['user'] = 'auth-svc'
+                                    # tmp_dict2['connection']['database'] = 'auth_svc'
+                                    #print(f" DEBUGGING>>>> tmp_dict is {tmp_dict}\n ")
+            
+            # Sept 7 2022:  turn on the thirdparty charts if indicated
+            if args.thirdparty:      
+                for x, value in lookup ("config", data) :
+                    if isinstance(value, dict):
+                        if 'featureEnableExtendedPartyIdType' in value : 
+                            # print("found fred5")
+                            # print(f" DEBUGGING>>>> x is {x}")
+                            # print(f" DEBUGGING>>>> value is {value})n ")
+                            value['featureEnableExtendedPartyIdType'] = 'true'
+                if 'thirdparty' in data : 
+                    data['thirdparty']['enabled'] = 'true'
+
+            # print(f"config count is {config_count}")
 
             ## sept 1 2022: update the mongo command to mongosh so we can use latest mongodb release
             ##              this fixes a recent issue with centraleventprocessor failing to start
@@ -263,10 +303,11 @@ def main(argv) :
             #     print("Updating the ml-testing-toolkit / mysql config ")
             #     for x, value in lookup("ml-testing-toolkit", data):  
             #         value['mysql'] = { "nameOverride" : "ttk-mysql" }
-
+        
         with open(vf, "w") as f:
             yaml.dump(data, f)
 
+    print(f" number of values files processed is {vf_count}")
     # now that we are inserting passwords with special characters in the password it is necessary to ensure
     # that $db_password is single quoted in the values files.
     print(" ==> mod_local_miniloop : Modify helm values, single quote db_password field to enable secure database password")
