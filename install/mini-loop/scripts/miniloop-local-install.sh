@@ -144,10 +144,11 @@ function modify_local_helm_charts {
   # note: this also updates $ETC_DIR/mysql_values.yaml with a new DB password
   # this password is and needs to be the same in all the values files which access the DB
   if [[ "$INSTALL_THIRDPARTY" == "true" ]]; then 
-    # include the -t flag to insure charts enable thirdparty deplpoyment 
+    # include the -t flag to the python script to  enable thirdparty deplpoyment 
+    printf  "==> thirdparty deployment is specified so thirdparty charts will be enabled"
     $SCRIPTS_DIR/mod_local_miniloop.py -d $HOME/helm -k $k8s_distro -t >> $LOGFILE 2>>$ERRFILE
   else 
-    $SCRIPTS_DIR/mod_local_miniloop.py -d $HOME/helm -k $k8s_distro -t >> $LOGFILE 2>>$ERRFILE
+    $SCRIPTS_DIR/mod_local_miniloop.py -d $HOME/helm -k $k8s_distro >> $LOGFILE 2>>$ERRFILE
   fi
   NEED_TO_REPACKAGE="true"
   printf " [ done ] \n"
@@ -215,6 +216,7 @@ function install_thirdparty_deps {
   # install the dependencies for the thirdparty charts
   # note that the mini-loop mysql database install takes care of the databases
   # so we just have to install redis 
+  printf "==> deploying thirdparty chart dependencies (redis)   \n"
   kubectl apply -f $ETC_DIR/redis_for_thirdparty.yaml 
 }
 
@@ -425,9 +427,11 @@ printf "            -- mini-loop Mojaloop local install utility -- \n"
 printf " utilities for deploying local Mojaloop helm chart for kubernetes 1.22+  \n"
 printf "********************* << START  >> *****************************************************\n\n"
 if [[ "$install_opts" == "thirdparty" ]] ; then 
-  #printf " thirdparty is set we are going to install  \n" $thirdparty
+
   INSTALL_THIRDPARTY="true"
 fi
+
+
 check_arch
 check_user
 set_k8s_version

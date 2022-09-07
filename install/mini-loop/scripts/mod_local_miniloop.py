@@ -11,13 +11,14 @@
             - updated to not deploy database(s) 
             - updated to have a fresh database password inserted so that the separately deployed database can be accessed i.e. no default database passwords are used
             - updated so that they work with more complex passwords than "password" :-) 
+            - Sept 2022 updated to cater for mongodb -> mongodbsh change in mongodb 
+            - Sept 2022 : added support for enabling thirdparty charts 
 
     author : Tom Daly 
     Date   : July 2022
 """
 
 import fileinput
-#from http.client import MULTI_STATUS
 from operator import sub
 import sys
 import re
@@ -110,6 +111,7 @@ def main(argv) :
     else : 
         print("nope")
 
+    sys.exit(1)
     ## check the yaml of these files because ruamel python lib has issues with loading em 
     yaml_files_check_list = [
         'ml-operator/values.yaml',
@@ -214,6 +216,8 @@ def main(argv) :
             print(line)
 
     print(" ==> mod_local_miniloop : Modify helm values to implement single mysql database")
+    if args.thirdparty:     
+        print(" ==> mod_local_miniloop : enabling thirdparty charts ")
     print(" ==> mod_local_miniloop : also update mongo command to mongosh command")
     vf_count=0
     #for vf in p.glob('**/chart-admin/*values.yaml') :
@@ -261,7 +265,6 @@ def main(argv) :
                             tmp_dict['DATABASE']['PASSWORD'] = db_pass
                             tmp_dict['DATABASE']['USER'] = 'consent_oracle'
                             tmp_dict['DATABASE']['DATABASE'] = 'consent_oracle'
-                            #print(f" DEBUGGING>>>> x is {x}  and value is {tmp_dict} ")
                         elif value.get('production.json'): 
                             tmp_dict=value['production.json']
                             if tmp_dict.get('DATABASE'):
@@ -269,21 +272,19 @@ def main(argv) :
                                 if tmp_dict2.get('connection'): 
                                     tmp_dict2['connection']['host'] = 'mldb'
                                     tmp_dict2['connection']['password'] = db_pass
-                                    # tmp_dict2['connection']['user'] = 'auth-svc'
-                                    # tmp_dict2['connection']['database'] = 'auth_svc'
-                                    #print(f" DEBUGGING>>>> tmp_dict is {tmp_dict}\n ")
             
             # Sept 7 2022:  turn on the thirdparty charts if indicated
-            if args.thirdparty:      
+            if args.thirdparty:     
                 for x, value in lookup ("config", data) :
                     if isinstance(value, dict):
-                        if 'featureEnableExtendedPartyIdType' in value : 
-                            # print("found fred5")
-                            # print(f" DEBUGGING>>>> x is {x}")
-                            # print(f" DEBUGGING>>>> value is {value})n ")
                             value['featureEnableExtendedPartyIdType'] = 'true'
                 if 'thirdparty' in data : 
                     data['thirdparty']['enabled'] = 'true'
+                # turn on the ttk tests 
+                if 'ml-ttk-test-setup-tp' in data : 
+                    data['ml-ttk-test-setup-tp']['tests']['enabled'] = 'true'
+                if 'ml-ttk-test-val-tp' in data : 
+                    data['ml-ttk-test-val-tp']['tests']['enabled'] = 'true'
 
             # print(f"config count is {config_count}")
 
@@ -298,16 +299,12 @@ def main(argv) :
                             print(f" old command is {value['command']}")
                             value['command'] = new_cmd
                             print(f" new command is {value['command']}")
-            ### need to set nameOverride  for mysql for ml-testing-toolkit as it appears to be missing
-            # if vf == Path('mojaloop/values.yaml') : 
-            #     print("Updating the ml-testing-toolkit / mysql config ")
-            #     for x, value in lookup("ml-testing-toolkit", data):  
-            #         value['mysql'] = { "nameOverride" : "ttk-mysql" }
         
         with open(vf, "w") as f:
             yaml.dump(data, f)
 
-    print(f" number of values files processed is {vf_count}")
+    #print(f" number of values files processed is {vf_count}")
+
     # now that we are inserting passwords with special characters in the password it is necessary to ensure
     # that $db_password is single quoted in the values files.
     print(" ==> mod_local_miniloop : Modify helm values, single quote db_password field to enable secure database password")
