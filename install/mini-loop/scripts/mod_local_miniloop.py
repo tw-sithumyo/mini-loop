@@ -271,6 +271,20 @@ def main(argv) :
                                 if tmp_dict2.get('connection'): 
                                     tmp_dict2['connection']['host'] = 'mldb'
                                     tmp_dict2['connection']['password'] = db_pass
+                                            tmp_dict=value['default.json']
+                    if value.get('production.json'):                         
+                        if tmp_dict.get('DATABASE'): 
+                            tmp_dict['DATABASE']['HOST'] = 'mldb'
+                            tmp_dict['DATABASE']['PASSWORD'] = db_pass
+                            tmp_dict['DATABASE']['USER'] = 'consent_oracle'
+                            tmp_dict['DATABASE']['DATABASE'] = 'consent_oracle'
+                        elif value.get('production.json'): 
+                            tmp_dict=value['production.json']
+                            if tmp_dict.get('DATABASE'):
+                                tmp_dict2 = tmp_dict['DATABASE']
+                                if tmp_dict2.get('connection'): 
+                                    tmp_dict2['connection']['host'] = 'mldb'
+                                    tmp_dict2['connection']['password'] = db_pass
             
             # Sept 7 2022:  turn on the thirdparty charts if indicated
             if args.thirdparty:     
