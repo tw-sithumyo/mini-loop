@@ -106,12 +106,11 @@ def main(argv) :
         print(f"mysql_values_file  is {mysql_values_file}")
         print(f"mysql password is {db_pass}")
 
-    if args.thirdparty: 
-        print("yep ")
-    else : 
-        print("nope")
+    # if args.thirdparty: 
+    #     print("yep ")
+    # else : 
+    #     print("nope")
 
-    sys.exit(1)
     ## check the yaml of these files because ruamel python lib has issues with loading em 
     yaml_files_check_list = [
         'ml-operator/values.yaml',
