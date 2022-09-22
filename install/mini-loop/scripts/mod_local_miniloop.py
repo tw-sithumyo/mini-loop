@@ -258,33 +258,36 @@ def main(argv) :
                     ## where we can standardise in the future in the core 
                     ## note these values must match what is in the mini-loop/etc/mysql_values.yaml 
                     if value.get('default.json'): 
+                        #print(f"ok got a default.json for values file {vf.parent/vf}")
                         tmp_dict=value['default.json']
                         if tmp_dict.get('DATABASE'): 
                             tmp_dict['DATABASE']['HOST'] = 'mldb'
                             tmp_dict['DATABASE']['PASSWORD'] = db_pass
                             tmp_dict['DATABASE']['USER'] = 'consent_oracle'
                             tmp_dict['DATABASE']['DATABASE'] = 'consent_oracle'
-                        elif value.get('production.json'): 
-                            tmp_dict=value['production.json']
-                            if tmp_dict.get('DATABASE'):
-                                tmp_dict2 = tmp_dict['DATABASE']
-                                if tmp_dict2.get('connection'): 
-                                    tmp_dict2['connection']['host'] = 'mldb'
-                                    tmp_dict2['connection']['password'] = db_pass
-                                            tmp_dict=value['default.json']
-                    if value.get('production.json'):                         
-                        if tmp_dict.get('DATABASE'): 
-                            tmp_dict['DATABASE']['HOST'] = 'mldb'
-                            tmp_dict['DATABASE']['PASSWORD'] = db_pass
-                            tmp_dict['DATABASE']['USER'] = 'consent_oracle'
-                            tmp_dict['DATABASE']['DATABASE'] = 'consent_oracle'
-                        elif value.get('production.json'): 
-                            tmp_dict=value['production.json']
-                            if tmp_dict.get('DATABASE'):
-                                tmp_dict2 = tmp_dict['DATABASE']
-                                if tmp_dict2.get('connection'): 
-                                    tmp_dict2['connection']['host'] = 'mldb'
-                                    tmp_dict2['connection']['password'] = db_pass
+                    if value.get('production.json'): 
+                        #tmp_dict1 = value['production.json']
+                        tmp_dict1 = {}
+                        if value['production.json'].get('DATABASE'):
+                            tmp_dict1 = value['production.json'].get('DATABASE')
+                            print(f"type of production.json is {type(tmp_dict1)}")
+                            if tmp_dict1.get('connection'): 
+                                tmp_dict1['connection']['host'] = 'mldb'
+                                tmp_dict1['connection']['password'] = db_pass
+                                print(f"DB IS >> {value['production.json'].get('DATABASE')}")
+                        if tmp_dict1.get('DATABASE'): 
+                            print(f">>>> ok <<<<<< got a production.json for values file {vf.parent/vf}")
+                        #print(f"x = {x} and value = {value}")
+                        #print(f"DB IS >> {value['production.json'].get('DATABASE')}")
+                        # tmp_dict2 = tmp_dict['DATABASE']
+                        # if tmp_dict2.get('connection'): 
+                        #     tmp_dict2['connection']['host'] = 'mldb'
+                        #     tmp_dict2['connection']['password'] = db_pass
+                    if value.get('DATABASE'): 
+                        print(f"ok got DATABASE for values file {vf.parent/vf}")
+                        print(f"x = {x} and value = {value}")
+
+                        
             
             # Sept 7 2022:  turn on the thirdparty charts if indicated
             if args.thirdparty:     
