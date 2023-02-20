@@ -8,7 +8,29 @@
 # Date Feb 2023
 # TODO/Notes
 # - sysctl -w vm.max_map_count=262144 => no -w flag for sysctl on macos 
-# - implement trap for sigerr and test 
+# - make this sctipt far more robust and trap errors / maybe retry startup if appropriate 
+# docker ps | grep -v ^CON | cut -d " " -f1 | xargs docker kill
+# docker install on ubuntu 
+# - curl -fsSL https://get.docker.com -o get-docker.sh
+# - sudo sh ./get-docker.sh --dry-run
+# - might need to uninstall snapd versions of docker due to paramiko errors with snapd version of docker i.e. /snap/docker/2281/lib/python3.6/site-packages/paramiko/transport.py:33: CryptographyDeprecationWarning: Python 3.6 is no longer supported by the Python core team
+# Open Following cloud ports for consoles (terraform)
+# - elastic search 9200
+# - kibana 5601 
+# - kafka broker 9092
+# - zookeeper 2181
+# - redpanda 8080
+# - mongo 27017
+# - mongo express console 8081
+# Now for some reason on Ubuntu 22.04 on oci free tier as well as opening ports need to set iptables 
+# @see https://stackoverflow.com/questions/62326988/cant-access-oracle-cloud-always-free-compute-http-port
+# also @see https://stackoverflow.com/questions/62326988/cant-access-oracle-cloud-always-free-compute-http-port
+# - $ sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport $MY_PORT -j ACCEPT
+# - $ sudo netfilter-persistent save
+# cleanup 
+# @see https://stackoverflow.com/questions/45357771/stop-and-remove-all-docker-containers
+# - docker system prune -f ; docker volume prune -f ;docker rm -f -v $(docker ps -q -a)
+
 
 function check_arch {
   ## check architecture Mojaloop deploys on x64 only today arm is coming  
@@ -51,21 +73,31 @@ function set_logfiles {
   printf "==> logfiles can be found at %s and %s\n " "$LOGFILE" "$ERRFILE"
 }
 
+function iptables_setup { 
+  ports_list=( "2181" "5601" "8080" "8081" "9200" "9092" "27017" "443" )
+  for i in "${ports_list[@]}"; do
+    sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport $i -j ACCEPT
+  done
+  sudo netfilter-persistent save
+}
+
 function mojaloop_infra_setup  {
   # @see https://github.com/mojaloop/platform-shared-tools/blob/main/packages/deployment/docker-compose-infra/README.md
   printf "start : mini-loop Mojaloop-vnext install base infrastructure services [%s]\n" "`date`"  
   # setup the directory structure and .env file 
-  dirs_list=( "certs" "esdata01" "kibanadata" "logs"  "tigerbeetle_data" )
   rm -rf $INFRA_DIR_EXEC
+  dirs_list=( "certs" "esdata01" "kibanadata" "logs"  "tigerbeetle_data" )
   mkdir $INFRA_DIR_EXEC
   for i in "${dirs_list[@]}"; do
     mkdir "$INFRA_DIR_EXEC/$i"
   done
   cp $INFRA_DIR/.env.sample $INFRA_DIR_EXEC/.env 
-  ls -la $INFRA_DIR_EXEC
+  #ls -la $INFRA_DIR_EXEC
   # make sure the ROOT_VOLUME_DEVICE is using absolute path
   perl -p -i -e 's/ROOT_VOLUME_DEVICE_PATH=.*$/ROOT_VOLUME_DEVICE_PATH=$ENV{INFRA_DIR_EXEC}/' $INFRA_DIR_EXEC/.env
   grep ROOT_VOLUME_DEVICE_PATH $INFRA_DIR_EXEC/.env
+
+  iptables_setup
 
   # provision TigerBeetle's data directory 
   docker run -v $INFRA_DIR_EXEC/tigerbeetle_data:/data ghcr.io/tigerbeetledb/tigerbeetle \
@@ -74,28 +106,38 @@ function mojaloop_infra_setup  {
         printf "TigerBeetle data directory provisioned correctly\n"
   else 
         printf "** Error : TigerBeetle data directory provisioning appears to have failed ** \n"
-        exit 1
+        printf "** for now we continue anyhow <== TODO: fix this "
     fi
 } 
 
 function mojaloop_infra_startup {
-  # start infra services 
-  printf "==> Mojaloop vNext : infrastructure services startup  \n"
-  docker-compose -f $INFRA_DIR/docker-compose-infra.yml --env-file $INFRA_DIR_EXEC/.env up -d
+  printf "==> Mojaloop vNext : infrastructure services startup \n"
+  # stop any running infra structure services 
+  mojaloop_infra_shutdown
+
+  # start services 
+  docker compose -f $INFRA_DIR/docker-compose-infra.yml --env-file $INFRA_DIR_EXEC/.env up -d
   if [[ $? -eq 0 ]]; then 
         printf "TigerBeetle data directory provisioned correctly\n"
   else 
-        printf "** Error : TigerBeetle data directory provisioning appears to have failed ** \n"
-        exit 1
-    fi
+        printf "** Error : infrastructure services startup appears to have failed ** \n"
+        printf "** for now we continue anyhow <== TODO: fix this "
+  fi
+  printf "==> Mojaloop vNext : infrastructure services startup [ok] \n"
 }
 
-
 function mojaloop_infra_shutdown {
-  # start infra services 
-
-  docker-compose -f $INFRA_DIR/docker-compose-infra.yml --env-file $INFRA_DIR_EXEC/.env down -d
-
+  printf "==> Mojaloop vNext : infrastructure services shutdown & cleanup \n"
+  # shutdown infra services 
+  docker compose -f $INFRA_DIR/docker-compose-infra.yml --env-file $INFRA_DIR_EXEC/.env down 
+  if [[ $? -eq 0 ]]; then 
+        printf "  infrastructure services shutdown\n"
+  else 
+        printf "** Error : infrastructure services shutdown appears to have failed ** \n"
+        printf "** you can try manually with the command :- \n"
+        printf "** docker compose -f $INFRA_DIR/docker-compose-infra.yml --env-file $INFRA_DIR_EXEC/.env down \n"
+        exit 1 
+  fi
 }
 
 
@@ -132,22 +174,6 @@ function print_end_banner {
 
 function print_success_message { 
   printf " ==> %s configuration of mojaloop deployed ok and passes endpoint health checks \n" "$RELEASE_NAME"
-  printf "     to execute the helm tests against this now running deployment please execute :  \n"
-  printf "     helm -n %s test ml --logs \n" "$NAMESPACE" 
-  printf "     \nto uninstall mojaloop please execute : \n"
-  printf "     helm delete -n %s ml\n"  "$NAMESPACE"
-
-
-  printf "\n** Notice and Caution ** \n"
-  printf "        mini-loop install scripts have now deployed mojaloop switch to use for  :-\n"
-  printf "            - trial \n"
-  printf "            - test \n"
-  printf "            - education and demonstration \n"
-  printf "        This installation should *NOT* be treated as a *production* deployment as it is designed for simplicity \n"
-  printf "        To be clear: Mojaloop itself is designed to be robust and secure and can be deployed securely \n"
-  printf "        This mini-loop install is neither secure nor robust. \n"
-  printf "        With this caution in mind , welcome to the full function of Mojaloop\n"
-  printf "        please see : https://mojaloop.io/ for more information, resources and online training\n"
 
   print_end_banner 
   
@@ -220,7 +246,8 @@ check_user
 printf "\n"
 
 if [[ "$mode" == "delete_ml" ]]; then
-  delete_mojaloop
+  mojaloop_infra_shutdown
+  #delete_mojaloop
   print_end_banner
 elif [[ "$mode" == "install_ml" ]]; then
   printf "start : mini-loop Mojaloop local install utility [%s]\n" "`date`" >> $LOGFILE
