@@ -186,7 +186,7 @@ function  mojaloop_cross_cutting_svcs_startup {
   fi
   #printf "==> Mojaloop vNext : infrastructure services startup [ok] \n"
   printf "to view the logs for the services run :- \n"
-  printf "  $DOCKER_COMPOSE -f $CROSS_CUT_DIR/docker-compose-cross-cutting.yml  --env-file $CROSS_CUT_DIR/.env logs -f \n"  # TODO tidy this up 
+  printf "  $DOCKER_COMPOSE -f $CROSS_CUT_DIR/docker-compose-cross-cutting.yml  --env-file $CROSS_CUT_DIR_EXEC/.env logs -f \n"  # TODO tidy this up 
 }
 
 function check_mojaloop_health {
