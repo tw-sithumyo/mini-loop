@@ -69,7 +69,6 @@ function set_logfiles {
   printf "================================================================================\n" >> $LOGFILE
   printf "start : mini-loop Mojaloop local install utility [%s]\n" "`date`" >> $ERRFILE
   printf "================================================================================\n" >> $ERRFILE
-
   printf "==> logfiles can be found at %s and %s\n " "$LOGFILE" "$ERRFILE"
 }
 
@@ -85,7 +84,11 @@ function mojaloop_infra_setup  {
   # @see https://github.com/mojaloop/platform-shared-tools/blob/main/packages/deployment/docker-compose-infra/README.md
   printf "start : mini-loop Mojaloop-vnext install base infrastructure services [%s]\n" "`date`"  
   # setup the directory structure and .env file 
-  rm -rf $INFRA_DIR_EXEC
+  if [[ -d "$INFRA_DIR_EXEC" ]]; then
+    printf "** Error: the infra working directory already exists \n"
+    printf "** please run cleanup.sh -m delete_ml as root to ensure a clean mojaloop vnext install\n"
+    exit 1 
+  fi 
   dirs_list=( "certs" "esdata01" "kibanadata" "logs"  "tigerbeetle_data" )
   mkdir $INFRA_DIR_EXEC
   for i in "${dirs_list[@]}"; do
@@ -124,21 +127,29 @@ function mojaloop_infra_startup {
         printf "** for now we continue anyhow <== TODO: fix this "
   fi
   printf "==> Mojaloop vNext : infrastructure services startup [ok] \n"
+
+  # configure elastic search @TODO: create random password for install and access and look it up from env file 
+  # Create the logging index
+  es_password=`grep ^ES_ELASTIC_PASSWORD $INFRA_DIR_EXEC/.env | cut -d "=" -f2  | tr -d " "`
+  echo "es_password is $es_password"
+  curl -i --insecure -X PUT "https://localhost:9200/ml-logging/" -u "elastic" -H "Content-Type: application/json" --data-binary "@$INFRA_DIR/es_mappings_logging.json" --user "elastic:$es_password"
+  # Create the auditing index
+  curl -i --insecure -X PUT "https://localhost:9200/ml-auditing/" -u "elastic" -H "Content-Type: application/json" --data-binary "@$INFRA_DIR/es_mappings_auditing.json" --user "elastic:$es_password"
 }
 
-function mojaloop_infra_shutdown {
-  printf "==> Mojaloop vNext : infrastructure services shutdown & cleanup \n"
-  # shutdown infra services 
-  docker compose -f $INFRA_DIR/docker-compose-infra.yml --env-file $INFRA_DIR_EXEC/.env down 
-  if [[ $? -eq 0 ]]; then 
-        printf "  infrastructure services shutdown\n"
-  else 
-        printf "** Error : infrastructure services shutdown appears to have failed ** \n"
-        printf "** you can try manually with the command :- \n"
-        printf "** docker compose -f $INFRA_DIR/docker-compose-infra.yml --env-file $INFRA_DIR_EXEC/.env down \n"
-        exit 1 
-  fi
-}
+# function mojaloop_infra_shutdown {
+#   printf "==> Mojaloop vNext : infrastructure services shutdown & cleanup \n"
+#   # shutdown infra services 
+#   docker compose -f $INFRA_DIR/docker-compose-infra.yml --env-file $INFRA_DIR_EXEC/.env down 
+#   if [[ $? -eq 0 ]]; then 
+#         printf "  infrastructure services shutdown\n"
+#   else 
+#         printf "** Error : infrastructure services shutdown appears to have failed ** \n"
+#         printf "** you can try manually with the command :- \n"
+#         printf "** docker compose -f $INFRA_DIR/docker-compose-infra.yml --env-file $INFRA_DIR_EXEC/.env down \n"
+#         exit 1 
+#   fi
+# }
 
 
 function  install_mojaloop_cross_cutting  {
@@ -217,8 +228,6 @@ export INFRA_DIR=$HOME/platform-shared-tools/packages/deployment/docker-compose-
 export INFRA_DIR_EXEC=$HOME/platform-shared-tools/packages/deployment/docker-compose-infra/exec
 
 
-echo $INFRA_DIR
-#ETC_DIR="$( cd $(dirname "$0")/../etc ; pwd )"
 
 # Process command line options as required
 while getopts "m:l:hH" OPTION ; do
