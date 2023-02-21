@@ -55,6 +55,14 @@ function check_user {
   fi
 }
 
+function check_clone_repo {
+  # check if repo eists , clone new if not 
+  if [[ ! -d "$REPO_DIR" ]]; then
+    printf " cloning repo from https://github.com/mojaloop/platform-shared-tools.git \n"
+    git clone https://github.com/mojaloop/platform-shared-tools.git $REPO_DIR
+  fi 
+}
+
 function set_logfiles {
   # set the logfiles
   if [ ! -z ${logfiles+x} ]; then 
@@ -113,7 +121,7 @@ function mojaloop_infra_setup  {
     fi
 } 
 
-function mojaloop_infra_startup {
+function mojaloop_infra_svcs_startup {
   printf "==> Mojaloop vNext : infrastructure services startup \n"
   # stop any running infra structure services 
   mojaloop_infra_shutdown
@@ -121,7 +129,7 @@ function mojaloop_infra_startup {
   # start services 
   docker compose -f $INFRA_DIR/docker-compose-infra.yml --env-file $INFRA_DIR_EXEC/.env up -d
   if [[ $? -eq 0 ]]; then 
-        printf "TigerBeetle data directory provisioned correctly\n"
+        printf "mojaloop vNext infrasructure services startup appears ok \n"
   else 
         printf "** Error : infrastructure services startup appears to have failed ** \n"
         printf "** for now we continue anyhow <== TODO: fix this "
@@ -135,32 +143,51 @@ function mojaloop_infra_startup {
   curl -i --insecure -X PUT "https://localhost:9200/ml-logging/" -u "elastic" -H "Content-Type: application/json" --data-binary "@$INFRA_DIR/es_mappings_logging.json" --user "elastic:$es_password"
   # Create the auditing index
   curl -i --insecure -X PUT "https://localhost:9200/ml-auditing/" -u "elastic" -H "Content-Type: application/json" --data-binary "@$INFRA_DIR/es_mappings_auditing.json" --user "elastic:$es_password"
+
+  printf "to view the logs for the services run :- \n"
+  printf "  $DOCKER_COMPOSE -f $INFRA_DIR/docker-compose-infra.yml --env-file ./.env logs -f \n"  # TODO tidy this up 
 }
 
-# function mojaloop_infra_shutdown {
-#   printf "==> Mojaloop vNext : infrastructure services shutdown & cleanup \n"
-#   # shutdown infra services 
-#   docker compose -f $INFRA_DIR/docker-compose-infra.yml --env-file $INFRA_DIR_EXEC/.env down 
-#   if [[ $? -eq 0 ]]; then 
-#         printf "  infrastructure services shutdown\n"
-#   else 
-#         printf "** Error : infrastructure services shutdown appears to have failed ** \n"
-#         printf "** you can try manually with the command :- \n"
-#         printf "** docker compose -f $INFRA_DIR/docker-compose-infra.yml --env-file $INFRA_DIR_EXEC/.env down \n"
-#         exit 1 
-#   fi
-# }
-
-
-function  install_mojaloop_cross_cutting  {
-  printf "start : mini-loop Mojaloop-vnext install horizontal services  [%s]\n" "`date`"
-
+function  mojaloop_cross_cutting_setup  {
+  printf "start : mini-loop Mojaloop-vnext setup cross cutting (i.e. horizontal services)  [%s]\n" "`date`"
+  # @see https://github.com/mojaloop/platform-shared-tools/tree/main/packages/deployment/docker-compose-cross-cutting
+  # setup the directory structure and .env file 
+  if [[ -d "$CROSS_CUT_DIR_EXEC" ]]; then
+    printf "** Error: the cross cutting (horizontal services) working directory already exists \n"
+    printf "** please run cleanup.sh -m delete_ml as root to ensure a clean mojaloop vnext install\n"
+    exit 1 
+  fi 
+  dirs_list=( "authentication-svc" "authorization-svc" "platform-configuration-svc" "auditing-svc"  "logging-svc" )
+  mkdir -p $CROSS_CUT_DIR_EXEC/data 
+  for i in "${dirs_list[@]}"; do
+    mkdir "$CROSS_CUT_DIR_EXEC/data/$i"
+  done
+  cp $CROSS_CUT_DIR/.env.sample $CROSS_CUT_DIR_EXEC/.env 
+  ls -la $CROSS_CUT_DIR_EXEC/data
+  # ensure the ROOT_VOLUME_DEVICE is using absolute path
+  perl -p -i -e 's/ROOT_VOLUME_DEVICE_PATH=.*$/ROOT_VOLUME_DEVICE_PATH=$ENV{CROSS_CUT_DIR_EXEC}/' $CROSS_CUT_DIR_EXEC/.env
+  grep ROOT_VOLUME_DEVICE_PATH $CROSS_CUT_DIR_EXEC/.env
+  # fix what appears to be a typo in the .env.sample file 
+  perl -p -i -e 's/^\/\//##/' $CROSS_CUT_DIR_EXEC/.env
 } 
 
-function  install_mojaloop_apps  {
-  printf "start : mini-loop Mojaloop-vnext install application [%s]\n" "`date`"
+function  mojaloop_cross_cutting_svcs_startup {
+  printf "==> Mojaloop vNext : cross cutting (horizontal) services startup \n"
+  # stop any running infra structure services 
+  # mojaloop_cross_cutting_svcs_shutdown   #TODO : this is broken should be part of holistic cleanup maybe separate cleanup script 
 
-} 
+  # start cross cutting services 
+  $DOCKER_COMPOSE -f $CROSS_CUT_DIR/docker-compose-cross-cutting.yml --env-file $CROSS_CUT_DIR_EXEC/.env  up -d
+  if [[ $? -eq 0 ]]; then 
+        printf "mojaloop vNext cross cutting (horizontal) services appear to have started ok\n"
+  else 
+        printf "** Error : infrastructure services startup appears to have failed ** \n"
+        printf "** for now we continue anyhow <== TODO: fix this "
+  fi
+  #printf "==> Mojaloop vNext : infrastructure services startup [ok] \n"
+  printf "to view the logs for the services run :- \n"
+  printf "  $DOCKER_COMPOSE -f $CROSS_CUT_DIR/docker-compose-cross-cutting.yml  --env-file $CROSS_CUT_DIR/.env logs -f \n"  # TODO tidy this up 
+}
 
 function check_mojaloop_health {
   # verify the health of the deployment 
@@ -223,11 +250,21 @@ Options:
 LOGFILE="/tmp/miniloop-install.log"
 ERRFILE="/tmp/miniloop-install.err"
 SCRIPTS_DIR="$( cd $(dirname "$0")/../scripts ; pwd )"
-DEPLOYMENT_DIR=$HOME/platform-shared-tools/packages/deployment
+REPO_DIR=$HOME/platform-shared-tools
+DEPLOYMENT_DIR=$REPO_DIR/packages/deployment
 export INFRA_DIR=$HOME/platform-shared-tools/packages/deployment/docker-compose-infra
 export INFRA_DIR_EXEC=$HOME/platform-shared-tools/packages/deployment/docker-compose-infra/exec
+export CROSS_CUT_DIR=$HOME/platform-shared-tools/packages/deployment/docker-compose-cross-cutting
+export CROSS_CUT_DIR_EXEC=$HOME/platform-shared-tools/packages/deployment/docker-compose-cross-cutting/exec
 
-
+DOCKER_COMPOSE=""
+docker-compose > /dev/null 2>&1
+if [[ $? -eq 0 ]]; then
+      DOCKER_COMPOSE=docker-compose 
+else
+      DOCKER_COMPOSE="docker compose" 
+fi
+echo $DOCKER_COMPOSE
 
 # Process command line options as required
 while getopts "m:l:hH" OPTION ; do
@@ -255,19 +292,22 @@ check_user
 printf "\n"
 
 if [[ "$mode" == "delete_ml" ]]; then
-  mojaloop_infra_shutdown
-  #delete_mojaloop
-  print_end_banner
+  printf "for delete please use cleanup.sh script for now \n"
+  exit 1 
+  # mojaloop_infra_shutdown
+  # #delete_mojaloop
+  # print_end_banner
 elif [[ "$mode" == "install_ml" ]]; then
   printf "start : mini-loop Mojaloop local install utility [%s]\n" "`date`" >> $LOGFILE
+  check_clone_repo 
   mojaloop_infra_setup
-  mojaloop_infra_startup
-  install_mojaloop_cross_cutting
-  install_mojaloop_apps
+  mojaloop_infra_svcs_startup
+  mojaloop_cross_cutting_setup
+  mojaloop_cross_cutting_svcs_startup
   #check_mojaloop_health
   #print_success_message 
-elif [[ "$mode" == "check_ml" ]]; then
-  check_mojaloop_health
+# elif [[ "$mode" == "check_ml" ]]; then
+#   check_mojaloop_health
 else 
   printf "** Error : wrong value for -m ** \n\n"
   showUsage
